@@ -1,0 +1,211 @@
+# Bridge 协议文档
+
+> 本文档定义 harness 和网页 chat 之间的协作协议。适用于任意能读 markdown 的 coding harness（opencode、claude code、codex 等）。opencode 用户可直接用项目里的 SKILL.md（已包含本协议）；其他 harness 用户参考本文档自行适配。
+
+---
+
+## 核心流程
+
+弱模型 harness 通过"用户复制粘贴"中转，借用强模型网页 chat 的推理能力：
+
+1. 用户在 harness 里触发求助 → harness 生成"首问包"
+2. 用户把首问包复制到网页 chat
+3. chat 在网页里跟用户多轮对话（harness 不参与中间轮）
+4. chat 给出格式化好的最终答案
+5. 用户把答案复制回 harness，带触发短语 → harness 解析"终答包"
+
+**harness 只参与"首问"和"终答"两头，中间多轮对话完全在 chat 网页里完成。**
+
+---
+
+## Sentinel 协议
+
+sentinel = 用特殊标记把一段文本分成几个段落，让人能读懂、机器能解析。格式是 `===全大写标记===`，每行一个。
+
+### 首问包（harness → chat，用户复制走）
+
+```
+===BRIDGE_START===
+session: <8位随机ID>
+type: debug | design | code | review
+harness: opencode | claude-code | codex
+
+===TASK===
+<任务描述，按类型模板填充>
+
+===CONTEXT===
+<相关上下文：代码片段、报错堆栈、约束条件等>
+<如果超长，在这里标注"已截断，如需完整内容请指定 file:line">
+
+===INSTRUCTIONS===
+你是一个被本地 harness 借用的外部顾问。harness 用的是弱模型，
+请你用你的强能力帮它完成下面任务。
+
+要求：
+1. 仔细阅读 TASK 和 CONTEXT
+2. 如果信息不够，直接问我（用户），我会补充
+3. 得出最终答案后，请严格按下面格式输出，方便 harness 解析。
+   注意：下面这行标记必须**各占一行**、**原样输出**（不要加反引号、
+   不要加 markdown 引用块 >、不要放进代码块里）：
+
+   ===BRIDGE_ANSWER===
+   <你的最终答案，可以是代码、方案、分析等，原样输出，不要加引用前缀>
+   ===BRIDGE_ANSWER_END===
+
+4. 如果无法按格式回答，直接回答即可，harness 会尽力解析
+5. 答案内容里如果需要展示 ===BRIDGE_ANSWER=== 这个字符串本身，
+   请用代码块包裹那一小段，避免与外层标记混淆
+
+===BRIDGE_END===
+```
+
+### 终答包（chat → harness，用户复制回）
+
+```
+===BRIDGE_ANSWER===
+<chat 的最终答案>
+===BRIDGE_ANSWER_END===
+```
+
+### 解析规则（harness 端）
+
+harness 端解析用户粘贴回来的内容时，按以下规则：
+
+- **严格模式**：找到**最后一个** `===BRIDGE_ANSWER===` 到其后**最近的** `===BRIDGE_ANSWER_END===` 之间的内容
+- **去引用前缀**：仅当**整段**每一行都以 `> ` 开头时（说明被 chat 用 markdown 引用块整体包裹），才去掉每行开头的 `> ` 和多余缩进；如果只有部分行有 `>`，保持原样不动（避免误伤 diff/代码块里的 `>`）
+- **宽松模式（fallback）**：如果找不到任何 `===BRIDGE_ANSWER===` sentinel，把用户粘贴的整段文本当答案
+- **session ID 不强制校验**：无状态设计，session ID 只做人眼对齐用
+
+### Session ID 用途
+
+- 8 位随机字母数字（如 `a1b2c3d4`），放在首问包开头
+- 用途：让用户在多任务并行时区分哪个首问包对应哪个终答
+- harness 端不校验 session ID（无状态），它只是人眼标签
+
+### Sentinel 冲突防护
+
+- sentinel 用 `===全大写===` 格式，正常代码/文档里很少出现
+- 如果用户代码里恰好有 `===BRIDGE_ANSWER===` 字符串，harness 端取**最后一个**匹配段（chat 的答案出现在回答末尾）
+- 如果 chat 在答案内容里又用了 `===BRIDGE_ANSWER===`（比如它在解释协议本身），INSTRUCTIONS 段已要求 chat 把这种字符串用代码块包裹
+
+---
+
+## 终答回传入口（触发短语约定）
+
+### 问题
+
+harness 是弱模型，它怎么知道用户粘贴回来的是"终答包"，该按 sentinel 协议解析？
+
+### 方案
+
+用户粘贴终答时，**必须带一个触发短语**让 harness 识别。推荐短语是 `/bridge-back`，但各 harness 可自定义等价命令。
+
+### opencode 约定
+
+- `/bridge <描述>` = 发起求助（生成首问包）
+- `/bridge-back <回答>` = 接收答案（解析终答包）
+
+两个命令语义相反，分开避免弱模型混淆。
+
+### 其他 harness 适配
+
+- **claude code**：可自定义等价 slash command，或在 CLAUDE.md 里定义"当用户说'这是 chat 的回答'时进入解析模式"
+- **codex**：在 prompt 模板里定义等价触发短语
+- **核心原则**：触发短语可按 harness 自定义，但**必须有一个明确入口**区分"发起求助"和"接收答案"两种语义
+
+### 具体流程
+
+1. harness 生成首问包时，末尾提示用户："chat 回答后，请把答案连同触发短语一起复制回来"
+2. 用户在 chat 网页复制 chat 的完整回答（含 sentinel 标记）
+3. 用户回到 harness，输入触发短语然后换行粘贴 chat 的回答
+4. harness 看到触发短语 → 进入"解析终答"模式 → 按 sentinel 协议提取 `===BRIDGE_ANSWER===` 段
+5. 如果用户没带触发短语，harness 把粘贴内容当普通文本处理（不解析 sentinel）
+
+---
+
+## 任务模板（4 类 + general fallback）
+
+skill 读取用户输入的任务描述，按**优先级顺序**匹配关键词。优先级固定为 **debug > design > review > code > general**。
+
+### debug 模板（调试问题）— 优先级 1
+
+- **触发关键词**: `报错|错误|exception|stack trace|traceback|不工作|失败|bug|crash|panic|挂了|崩了`
+- **TASK 段填充**: `请帮我调试以下问题：<用户描述的现象>`
+- **CONTEXT 段填充**: 报错堆栈 + 相关代码片段 + 已尝试过的修复（由用户提供）
+- **INSTRUCTIONS 补充**: `请分析根因，给出修复方案（代码 diff 或步骤）`
+
+### design 模板（架构/方案设计）— 优先级 2
+
+- **触发关键词**: `设计|架构|方案|怎么实现|如何设计|design|architecture|approach|选型`
+- **TASK 段填充**: `请帮我设计以下方案：<用户描述的需求>`
+- **CONTEXT 段填充**: 现有架构、约束条件、技术栈、性能要求（由用户提供）
+- **INSTRUCTIONS 补充**: `请给出设计方案，包含权衡分析和推荐方案`
+
+### review 模板（代码审查）— 优先级 3
+
+- **触发关键词**: `审查|review|看看这段|检查|有没有问题|code review|评审`
+- **TASK 段填充**: `请帮我审查以下代码：<用户指定的范围>`
+- **CONTEXT 段填充**: 待审查的代码 + 审查重点（可选，由用户提供）
+- **INSTRUCTIONS 补充**: `请指出问题（按严重程度分类）、给出改进建议`
+
+### code 模板（写代码）— 优先级 4
+
+- **触发关键词**: `写|实现|add|implement|create|refactor|编码|函数|类|方法`
+- **TASK 段填充**: `请帮我实现以下功能：<用户描述的目标>`
+- **CONTEXT 段填充**: 相关现有代码、接口约定、风格规范（由用户提供）
+- **INSTRUCTIONS 补充**: `请给出完整代码，遵循现有风格，包含必要注释`
+
+### general 通用模板（fallback）— 优先级 5
+
+当任务描述匹配不到任何一类，或匹配到 ≥2 类且无法按优先级唯一确定时使用：
+- **TASK 段**: 直接放用户原始描述
+- **CONTEXT 段**: 放用户提供的上下文
+- **INSTRUCTIONS 段**: 不额外补充，走默认
+
+---
+
+## 自动识别逻辑
+
+按优先级链依次尝试匹配：
+
+1. **先试 debug**：命中 `报错|错误|exception|stack trace|traceback|不工作|失败|bug|crash|panic|挂了|崩了` 任一 → 归为 debug
+2. **再试 design**：命中 `设计|架构|方案|怎么实现|如何设计|design|architecture|approach|选型` 任一 → 归为 design
+3. **再试 review**：命中 `审查|review|看看这段|检查|有没有问题|code review|评审` 任一 → 归为 review
+4. **再试 code**：命中 `写|实现|add|implement|create|refactor|编码|函数|类|方法` 任一 → 归为 code
+5. **fallback**：以上都未命中，或匹配到 ≥2 类且无法按优先级唯一确定 → general 通用模板
+
+**为什么是这个优先级**：用户说"帮我看看这个实现为什么不工作"会同时命中 code（"实现"）和 debug（"不工作"）。按优先级 debug 优先，归为 debug。这符合直觉——用户说"不工作"时最需要的是先定位问题根因，而不是直接改代码。
+
+| 用户输入 | 命中 | 归类 |
+|---------|------|------|
+| "帮我看看这个报错 KeyError in auth.py" | debug（报错） | debug |
+| "帮我设计一个用户认证方案" | design（设计、方案） | design |
+| "审查一下这段代码" | review（审查） | review |
+| "帮我写一个 JWT 中间件" | code（写） | code |
+| "帮我看看这个实现为什么不工作" | debug（不工作）+ code（实现） | debug（优先） |
+| "今天天气怎么样" | 无命中 | general |
+
+---
+
+## 边缘情况处理
+
+| 情况 | 处理 |
+|------|------|
+| 用户输入空任务描述 | 提示"请描述你的任务"并退出 |
+| 自动识别置信度低（≥2 类无法按优先级唯一确定） | fallback 到 general 通用模板 |
+| chat 回答没有 sentinel 包裹 | harness 端宽松解析，整段当答案 |
+| 首问包超长（>8000 字符，保守阈值） | CONTEXT 段截断 + 标注"已截断"。阈值可按目标 chat 的输入上限自行调 |
+| 用户代码里恰好有 sentinel 字符串 | harness 取最后一个匹配段；sentinel 用全大写降低冲突概率 |
+| chat 网页给回答加了 `>` 引用块 | harness 解析时仅当整段每行都以 `> ` 开头才去引用前缀；部分行有 `>` 保持原样 |
+| chat 不按格式回答 | INSTRUCTIONS 段已写"无法按格式回答就直接回答"，harness 端宽松解析兜底 |
+
+---
+
+## Guardrails
+
+- **不发送任何网络请求**——纯文本生成，不调用 chat API
+- **不读写用户代码文件**——所有上下文由用户手动提供，harness 只负责打包
+- 输出的首问包必须有明确的"复制起点"和"复制终点"提示（如 `════复制起点════` / `════复制终点════` 标记）
+- 自动识别置信度低时必须 fallback，不能硬选
+- sentinel 协议不做版本协商——v1 固定
+- 终答解析入口必须有明确触发短语（推荐 `/bridge-back`），harness 见此短语才进入解析模式

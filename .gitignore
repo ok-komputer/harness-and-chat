@@ -1,0 +1,21 @@
+# oh-my-openagent internal state
+.omo/
+
+# OS files
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Node
+node_modules/
+
+# Temp files
+*.tmp
+*.log
