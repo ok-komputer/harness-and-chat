@@ -1,6 +1,6 @@
 ---
 name: bridge
-description: Bridge a weak local harness model to a strong web-based chat model via copy-paste handoff. Use when the user wants to delegate a hard task (debug/design/code/review) to a stronger external chat by generating a sentinel-formatted prompt package, then parse the answer back. Triggers: /bridge, /bridge-back, "帮我问问 chat", "借用强模型", "这个问题我搞不定".
+description: "Bridge a weak local harness model to a strong web-based chat model via copy-paste handoff. Use when the user wants to delegate a hard task (debug/design/code/review) to a stronger external chat by generating a sentinel-formatted prompt package, then parse the answer back. Triggers: /bridge, /bridge-back."
 license: MIT
 ---
 
@@ -327,7 +327,13 @@ INSTRUCTIONS 补充: `请给出完整代码，遵循现有风格，包含必要�
 
 ## 安装
 
-### opencode 用户
+### 一键安装（推荐）
+
+```bash
+npx skills add ok-komputer/harness-and-chat
+```
+
+### opencode 用户手动安装
 
 把本文件复制到以下任一路径：
 

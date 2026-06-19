@@ -10,7 +10,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `skills/bridge/SKILL.md` | opencode skill 主体，自包含。opencode 用户只需这一个文件 |
+| `bridge/SKILL.md` | opencode skill 主体，自包含。opencode 用户只需这一个文件 |
 | `PROTOCOL.md` | 纯协议文档，给非 opencode harness 用户参考 |
 | `README.md` | 本文件 |
 
@@ -26,7 +26,7 @@ npx skills add ok-komputer/harness-and-chat
 
 **方式二：手动复制**
 
-把 `skills/bridge/SKILL.md` 复制到：
+把 `bridge/SKILL.md` 复制到：
 - 全局：`~/.config/opencode/skills/bridge/SKILL.md`（Windows: `C:\Users\<用户名>\.config\opencode\skills\bridge\SKILL.md`）
 - 项目级：`<项目目录>\.opencode\skills\bridge\SKILL.md`
 
