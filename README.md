@@ -10,19 +10,27 @@
 
 | 文件 | 用途 |
 |------|------|
-| `SKILL.md` | opencode skill 主体，自包含。opencode 用户只需这一个文件 |
+| `skills/bridge/SKILL.md` | opencode skill 主体，自包含。opencode 用户只需这一个文件 |
 | `PROTOCOL.md` | 纯协议文档，给非 opencode harness 用户参考 |
 | `README.md` | 本文件 |
 
 ## 安装（opencode 用户）
 
-**3 步搞定**：
+**方式一：一键安装（推荐）**
 
-1. 把 `SKILL.md` 复制到 `~/.config/opencode/skills/bridge/SKILL.md`（Windows: `C:\Users\<用户名>\.config\opencode\skills\bridge\SKILL.md`）
-2. 在 opencode 里打 `/bridge <任务描述>` 触发
-3. 按 skill 输出的提示复制粘贴
+```bash
+npx skills add ok-komputer/harness-and-chat
+```
 
-项目级安装也行：复制到 `<项目目录>\.opencode\skills\bridge\SKILL.md`，只在该项目生效。
+这会自动把 `bridge` skill 安装到 opencode 的 skills 目录。
+
+**方式二：手动复制**
+
+把 `skills/bridge/SKILL.md` 复制到：
+- 全局：`~/.config/opencode/skills/bridge/SKILL.md`（Windows: `C:\Users\<用户名>\.config\opencode\skills\bridge\SKILL.md`）
+- 项目级：`<项目目录>\.opencode\skills\bridge\SKILL.md`
+
+安装后在 opencode 里打 `/bridge <任务描述>` 即可触发。
 
 ## 快速上手示例
 
